@@ -110,6 +110,10 @@ with tab1:
         model = XGBRegressor(random_state=42)
         
         random_search = RandomizedSearchCV(estimator=model, param_distributions=param_dist, n_iter=10, cv=3, random_state=42)
+        
+        # Thêm thông báo cho người dùng khi quá trình huấn luyện bắt đầu
+        st.info("Đang thực hiện RandomizedSearchCV để tìm tham số tối ưu...")
+
         random_search.fit(X_train, y_train.values.ravel())
 
         best_model = random_search.best_estimator_
@@ -120,6 +124,7 @@ with tab1:
         rmse = np.sqrt(mean_squared_error(y_test, y_pred))
         r2 = r2_score(y_test, y_pred)
 
+        # Thêm thông báo thành công
         st.success(f"Huấn luyện xong - MAE khoảng cách: {mae:.3f} km")
         st.success(f"RMSE: {rmse:.3f} km")
         st.success(f"R²: {r2:.3f}")
@@ -128,6 +133,7 @@ with tab1:
         joblib.dump(best_model, buffer)
         buffer.seek(0)
 
+        # Cung cấp nút tải mô hình đã huấn luyện
         st.download_button(
             label="📥 Tải mô hình huấn luyện (.joblib)",
             data=buffer,
