@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from xgboost import XGBRegressor
-from sklearn.multioutput import MultiOutputRegressor
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import joblib
@@ -50,6 +49,7 @@ with tab1:
 
     if option == "Sinh dữ liệu mô phỏng":
         if st.button("Huấn luyện mô hình từ dữ liệu mô phỏng"):
+            st.info("Đang sinh dữ liệu mô phỏng...")
             np.random.seed(42)
             n_samples = 1000
             data = []
@@ -76,6 +76,8 @@ with tab1:
                 })
 
             df = pd.DataFrame(data)
+            st.success("Dữ liệu mô phỏng đã được sinh thành công!")
+            st.dataframe(df.head())
     else:
         uploaded_data = st.file_uploader("📂 Tải file Excel dữ liệu thực tế", type=["xlsx"])
         if uploaded_data:
@@ -86,6 +88,8 @@ with tab1:
             st.info("Vui lòng tải file dữ liệu để huấn luyện.")
 
     if df is not None and st.button("🔧 Tiến hành huấn luyện mô hình"):
+        st.info("Đang huấn luyện mô hình...")
+
         df['azimuth_sin'] = np.sin(np.radians(df['azimuth']))
         df['azimuth_cos'] = np.cos(np.radians(df['azimuth']))
 
