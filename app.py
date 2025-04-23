@@ -50,7 +50,7 @@ with tab1:
     if option == "Sinh dữ liệu mô phỏng":
         if st.button("Huấn luyện mô hình từ dữ liệu mô phỏng"):
             st.info("Đang sinh dữ liệu mô phỏng...")
-            np.random.seed(100)
+            np.random.seed(42)
             n_samples = 1000
             data = []
             for _ in range(n_samples):
@@ -88,58 +88,64 @@ with tab1:
             st.info("Vui lòng tải file dữ liệu để huấn luyện.")
 
     if df is not None and st.button("🔧 Tiến hành huấn luyện mô hình"):
-        st.info("Đang huấn luyện mô hình...")
+        try:
+            st.info("Đang huấn luyện mô hình...")
 
-        df['azimuth_sin'] = np.sin(np.radians(df['azimuth']))
-        df['azimuth_cos'] = np.cos(np.radians(df['azimuth']))
+            # Xử lý thêm dữ liệu
+            df['azimuth_sin'] = np.sin(np.radians(df['azimuth']))
+            df['azimuth_cos'] = np.cos(np.radians(df['azimuth']))
 
-        X = df[['lat_receiver', 'lon_receiver', 'antenna_height', 'signal_strength', 'frequency', 'azimuth_sin', 'azimuth_cos']]
-        y = df[['distance_km']]
+            X = df[['lat_receiver', 'lon_receiver', 'antenna_height', 'signal_strength', 'frequency', 'azimuth_sin', 'azimuth_cos']]
+            y = df[['distance_km']]
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            # Chia dữ liệu thành tập huấn luyện và kiểm tra
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # --- Tuning tham số với RandomizedSearchCV ---
-        param_dist = {
-            'n_estimators': [100, 200, 300, 400],
-            'max_depth': [3, 6, 9, 12],
-            'learning_rate': [0.01, 0.05, 0.1],
-            'subsample': [0.7, 0.8, 1.0],
-            'colsample_bytree': [0.7, 0.8, 1.0]
-        }
+            # --- Tuning tham số với RandomizedSearchCV ---
+            param_dist = {
+                'n_estimators': [100, 200, 300, 400],
+                'max_depth': [3, 6, 9, 12],
+                'learning_rate': [0.01, 0.05, 0.1],
+                'subsample': [0.7, 0.8, 1.0],
+                'colsample_bytree': [0.7, 0.8, 1.0]
+            }
 
-        model = XGBRegressor(random_state=42)
-        
-        random_search = RandomizedSearchCV(estimator=model, param_distributions=param_dist, n_iter=10, cv=3, random_state=42)
-        
-        # Thêm thông báo cho người dùng khi quá trình huấn luyện bắt đầu
-        st.info("Đang thực hiện RandomizedSearchCV để tìm tham số tối ưu...")
+            model = XGBRegressor(random_state=42)
 
-        random_search.fit(X_train, y_train.values.ravel())
+            random_search = RandomizedSearchCV(estimator=model, param_distributions=param_dist, n_iter=10, cv=3, random_state=42)
+            
+            # Thêm thông báo cho người dùng khi quá trình huấn luyện bắt đầu
+            st.info("Đang thực hiện RandomizedSearchCV để tìm tham số tối ưu...")
 
-        best_model = random_search.best_estimator_
+            random_search.fit(X_train, y_train.values.ravel())
 
-        # Đánh giá mô hình
-        y_pred = best_model.predict(X_test)
-        mae = mean_absolute_error(y_test, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-        r2 = r2_score(y_test, y_pred)
+            best_model = random_search.best_estimator_
 
-        # Thêm thông báo thành công
-        st.success(f"Huấn luyện xong - MAE khoảng cách: {mae:.3f} km")
-        st.success(f"RMSE: {rmse:.3f} km")
-        st.success(f"R²: {r2:.3f}")
+            # Đánh giá mô hình
+            y_pred = best_model.predict(X_test)
+            mae = mean_absolute_error(y_test, y_pred)
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+            r2 = r2_score(y_test, y_pred)
 
-        buffer = BytesIO()
-        joblib.dump(best_model, buffer)
-        buffer.seek(0)
+            # Thêm thông báo thành công
+            st.success(f"Huấn luyện xong - MAE khoảng cách: {mae:.3f} km")
+            st.success(f"RMSE: {rmse:.3f} km")
+            st.success(f"R²: {r2:.3f}")
 
-        # Cung cấp nút tải mô hình đã huấn luyện
-        st.download_button(
-            label="📥 Tải mô hình huấn luyện (.joblib)",
-            data=buffer,
-            file_name="distance_model.joblib",
-            mime="application/octet-stream"
-        )
+            buffer = BytesIO()
+            joblib.dump(best_model, buffer)
+            buffer.seek(0)
+
+            # Cung cấp nút tải mô hình đã huấn luyện
+            st.download_button(
+                label="📥 Tải mô hình huấn luyện (.joblib)",
+                data=buffer,
+                file_name="distance_model.joblib",
+                mime="application/octet-stream"
+            )
+        except Exception as e:
+            st.error(f"Đã xảy ra lỗi trong quá trình huấn luyện: {e}")
+            st.exception(e)
 
 # --- Tab 2: Dự đoán ---
 with tab2:
