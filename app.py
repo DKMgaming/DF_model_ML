@@ -50,7 +50,7 @@ with tab1:
     if option == "Sinh dữ liệu mô phỏng":
         if st.button("Huấn luyện mô hình từ dữ liệu mô phỏng"):
             st.info("Đang sinh dữ liệu mô phỏng...")
-            np.random.seed(42)
+            np.random.seed(100)
             n_samples = 1000
             data = []
             for _ in range(n_samples):
