@@ -51,7 +51,7 @@ with tab1:
         if st.button("Huấn luyện mô hình từ dữ liệu mô phỏng"):
             st.info("Đang sinh dữ liệu mô phỏng...")
             np.random.seed(42)
-            n_samples = 1000
+            n_samples = 1000  # Tạo 1000 mẫu dữ liệu mô phỏng
             data = []
             for _ in range(n_samples):
                 lat_tx = np.random.uniform(10.0, 21.0)
@@ -103,17 +103,18 @@ with tab1:
 
             # --- Tuning tham số với RandomizedSearchCV ---
             param_dist = {
-                'n_estimators': [100, 200, 300, 400],
-                'max_depth': [3, 6, 9, 12],
-                'learning_rate': [0.01, 0.05, 0.1],
-                'subsample': [0.7, 0.8, 1.0],
-                'colsample_bytree': [0.7, 0.8, 1.0]
+                'n_estimators': [100, 200, 300],  # Giảm số lượng giá trị tham số để thử
+                'max_depth': [3, 6, 9],  # Giảm số giá trị tham số
+                'learning_rate': [0.05, 0.1],
+                'subsample': [0.7, 0.8],
+                'colsample_bytree': [0.7, 0.8]
             }
 
             model = XGBRegressor(random_state=42)
 
-            random_search = RandomizedSearchCV(estimator=model, param_distributions=param_dist, n_iter=10, cv=3, random_state=42)
-            
+            # Giảm số vòng lặp để tăng tốc
+            random_search = RandomizedSearchCV(estimator=model, param_distributions=param_dist, n_iter=5, cv=3, random_state=42)
+
             # Thêm thông báo cho người dùng khi quá trình huấn luyện bắt đầu
             st.info("Đang thực hiện RandomizedSearchCV để tìm tham số tối ưu...")
 
@@ -171,8 +172,14 @@ with tab2:
 
                 lat_pred, lon_pred = calculate_destination(row['lat_receiver'], row['lon_receiver'], row['azimuth'], predicted_distance)
 
+                # Thêm thông tin về tần số và mức tín hiệu vào tooltip của "Nguồn phát dự đoán"
+                folium.Marker(
+                    [lat_pred, lon_pred],
+                    tooltip=f"Nguồn phát dự đoán\nTần số: {row['frequency']} MHz\nMức tín hiệu: {row['signal_strength']} dBm",
+                    icon=folium.Icon(color='red')
+                ).add_to(m)
+
                 folium.Marker([row['lat_receiver'], row['lon_receiver']], tooltip="Trạm thu", icon=folium.Icon(color='blue')).add_to(m)
-                folium.Marker([lat_pred, lon_pred], tooltip="Nguồn phát dự đoán", icon=folium.Icon(color='red')).add_to(m)
                 folium.PolyLine(locations=[[row['lat_receiver'], row['lon_receiver']], [lat_pred, lon_pred]], color='green').add_to(m)
 
                 results.append({
@@ -180,7 +187,9 @@ with tab2:
                     "lon_receiver": row['lon_receiver'],
                     "lat_pred": lat_pred,
                     "lon_pred": lon_pred,
-                    "predicted_distance_km": predicted_distance
+                    "predicted_distance_km": predicted_distance,
+                    "frequency": row['frequency'],
+                    "signal_strength": row['signal_strength']
                 })
 
             st.dataframe(pd.DataFrame(results))
@@ -212,7 +221,11 @@ with tab2:
 
                 m = folium.Map(location=[lat_rx, lon_rx], zoom_start=10)
                 folium.Marker([lat_rx, lon_rx], tooltip="Trạm thu", icon=folium.Icon(color='blue')).add_to(m)
-                folium.Marker([lat_pred, lon_pred], tooltip="Nguồn phát dự đoán", icon=folium.Icon(color='red')).add_to(m)
+                folium.Marker(
+                    [lat_pred, lon_pred],
+                    tooltip=f"Nguồn phát dự đoán\nTần số: {freq} MHz\nMức tín hiệu: {signal} dBm",
+                    icon=folium.Icon(color='red')
+                ).add_to(m)
                 folium.PolyLine(locations=[[lat_rx, lon_rx], [lat_pred, lon_pred]], color='green').add_to(m)
 
                 with st.container():
