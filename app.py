@@ -77,13 +77,13 @@ with tab1:
 
             df = pd.DataFrame(data)
             st.success("Dữ liệu mô phỏng đã được sinh thành công!")
-            st.dataframe(df.head())
+            st.dataframe(df.head())  # Hiển thị dữ liệu mô phỏng cho người dùng
     else:
         uploaded_data = st.file_uploader("📂 Tải file Excel dữ liệu thực tế", type=["xlsx"])
         if uploaded_data:
             df = pd.read_excel(uploaded_data)
             st.success("Đã tải dữ liệu thực tế.")
-            st.dataframe(df.head())
+            st.dataframe(df.head())  # Hiển thị dữ liệu thực tế tải lên
         else:
             st.info("Vui lòng tải file dữ liệu để huấn luyện.")
 
