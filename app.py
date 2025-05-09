@@ -40,6 +40,63 @@ def create_folium_map(data=None):
         m = folium.Map(location=[16.0, 108.0], zoom_start=6, tiles="Stadia.StamenTonerLite")
     return m
 
+def create_kml(results):
+    kml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n'
+    kml += '<Document>\n'
+    kml += '<name>Dự đoán Tọa độ Nguồn Phát Xạ</name>\n'
+    for index, result in enumerate(results):
+        kml += '<Placemark>\n'
+        kml += f'<name>Nguồn Phát Dự Đoán {index + 1}</name>\n'
+        kml += '<Point>\n'
+        kml += f'<coordinates>{result["lon_pred"]},{result["lat_pred"]},0</coordinates>\n'
+        kml += '</Point>\n'
+        kml += '<ExtendedData>\n'
+        kml += f'<Data name="Lat_Receiver"><value>{result["lat_receiver"]}</value></Data>\n'
+        kml += f'<Data name="Lon_Receiver"><value>{result["lon_receiver"]}</value></Data>\n'
+        kml += f'<Data name="Predicted_Distance_km"><value>{result["predicted_distance_km"]:.2f}</value></Data>\n'
+        kml += f'<Data name="Frequency_MHz"><value>{result["frequency"]}</value></Data>\n'
+        kml += f'<Data name="Signal_Strength_dBm"><value>{result["signal_strength"]}</value></Data>\n'
+        kml += '</ExtendedData>\n'
+        kml += '</Placemark>\n'
+        kml += '<Placemark>\n'
+        kml += f'<name>Trạm Thu {index + 1}</name>\n'
+        kml += '<Point>\n'
+        kml += f'<coordinates>{result["lon_receiver"]},{result["lat_receiver"]},0</coordinates>\n'
+        kml += '</Point>\n'
+        kml += '</Placemark>\n'
+    kml += '</Document>\n'
+    kml += '</kml>\n'
+    return kml
+
+def create_single_kml(lat_rx, lon_rx, lat_pred, lon_pred, predicted_distance, frequency, signal_strength):
+    kml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n'
+    kml += '<Document>\n'
+    kml += '<name>Dự đoán Tọa độ Nguồn Phát Xạ</name>\n'
+    kml += '<Placemark>\n'
+    kml += '<name>Nguồn Phát Dự Đoán</name>\n'
+    kml += '<Point>\n'
+    kml += f'<coordinates>{lon_pred},{lat_pred},0</coordinates>\n'
+    kml += '</Point>\n'
+    kml += '<ExtendedData>\n'
+    kml += f'<Data name="Lat_Receiver"><value>{lat_rx}</value></Data>\n'
+    kml += f'<Data name="Lon_Receiver"><value>{lon_rx}</value></Data>\n'
+    kml += f'<Data name="Predicted_Distance_km"><value>{predicted_distance:.2f}</value></Data>\n'
+    kml += f'<Data name="Frequency_MHz"><value>{frequency}</value></Data>\n'
+    kml += f'<Data name="Signal_Strength_dBm"><value>{signal_strength}</value></Data>\n'
+    kml += '</ExtendedData>\n'
+    kml += '</Placemark>\n'
+    kml += '<Placemark>\n'
+    kml += '<name>Trạm Thu</name>\n'
+    kml += '<Point>\n'
+    kml += f'<coordinates>{lon_rx},{lat_rx},0</coordinates>\n'
+    kml += '</Point>\n'
+    kml += '</Placemark>\n'
+    kml += '</Document>\n'
+    kml += '</kml>\n'
+    return kml
+
 # --- Giao diện ---
 st.set_page_config(layout="wide")
 st.title("🔭 Dự đoán tọa độ nguồn phát xạ theo hướng định vị")
@@ -59,7 +116,6 @@ with tab1:
             st.info("Đang sinh dữ liệu mô phỏng...")
             np.random.seed(42)
             n_samples = 1000  # Tạo 1000 mẫu dữ liệu mô phỏng
-            # ... (phần tạo dữ liệu mô phỏng giữ nguyên)
             data = []
             for _ in range(n_samples):
                 lat_tx = np.random.uniform(10.0, 21.0)
@@ -158,14 +214,13 @@ with tab2:
             df_input = pd.read_excel(uploaded_excel)
             results = []
 
-            # Khởi tạo bản đồ và lưu vào session state nếu chưa có
             if 'prediction_map' not in st.session_state:
                 st.session_state['prediction_map'] = create_folium_map(df_input)
-
-            # Xóa các layer cũ (markers, polylines)
-            for layer in st.session_state['prediction_map']._children.values():
-                if isinstance(layer, folium.Marker) or isinstance(layer, folium.PolyLine):
-                    st.session_state['prediction_map']._children.pop(layer.get_name(), None)
+            else:
+                new_center = [df_input['lat_receiver'].mean(), df_input['lon_receiver'].mean()]
+                if st.session_state['prediction_map'].location != new_center:
+                    st.session_state['prediction_map'] = create_folium_map(df_input)
+                st.session_state['prediction_map']._children = {k: v for k, v in st.session_state['prediction_map']._children.items() if k.startswith('tile_layer') or k.startswith('crs')}
 
             for _, row in df_input.iterrows():
                 az_sin = np.sin(np.radians(row['azimuth']))
@@ -196,51 +251,18 @@ with tab2:
                 })
 
             st.dataframe(pd.DataFrame(results))
-            st_folium(st.session_state['prediction_map'], width=800, height=500, key="prediction_map") # Thêm key
+            st_folium(st.session_state['prediction_map'], width=800, height=500, key="prediction_map")
+
+            # Nút xuất file KML cho nhiều kết quả
+            if results:
+                kml_string = create_kml(results)
+                b = BytesIO(kml_string.encode())
+                st.download_button(
+                    label="📤 Xuất file KML",
+                    data=b,
+                    file_name="predicted_locations.kml",
+                    mime="application/vnd.google-earth.kml+xml"
+                )
 
         else:
-            with st.form("input_form"):
-                lat_rx = st.number_input("Vĩ độ trạm thu", value=16.0)
-                lon_rx = st.number_input("Kinh độ trạm thu", value=108.0)
-                h_rx = st.number_input("Chiều cao anten (m)", value=30.0)
-                signal = st.number_input("Mức tín hiệu thu (dBm)", value=-80.0)
-                freq = st.number_input("Tần số (MHz)", value=900.0)
-                azimuth = st.number_input("Góc phương vị (độ)", value=45.0)
-                submitted = st.form_submit_button("🔍 Dự đoán tọa độ nguồn phát")
-
-            if submitted:
-                az_sin = np.sin(np.radians(azimuth))
-                az_cos = np.cos(np.radians(azimuth))
-                X_input = np.array([[lat_rx, lon_rx, h_rx, signal, freq, az_sin, az_cos]])
-                predicted_distance = model.predict(X_input)[0]
-                predicted_distance = max(predicted_distance, 0.1)
-
-                lat_pred, lon_pred = calculate_destination(lat_rx, lon_rx, azimuth, predicted_distance)
-
-                st.success("🎯 Tọa độ nguồn phát xạ dự đoán:")
-                st.markdown(f"- **Vĩ độ**: `{lat_pred:.6f}`")
-                st.markdown(f"- **Kinh độ**: `{lon_pred:.6f}`")
-                st.markdown(f"- **Khoảng cách dự đoán**: `{predicted_distance:.2f} km`")
-
-                if 'prediction_map' not in st.session_state:
-                    st.session_state['prediction_map'] = create_folium_map(pd.DataFrame([{'lat_receiver': lat_rx, 'lon_receiver': lon_rx}]))
-                else:
-                    st.session_state['prediction_map'].location = [lat_rx, lon_rx]
-                    # Xóa các layer cũ
-                    for layer in st.session_state['prediction_map']._children.values():
-                        if isinstance(layer, folium.Marker) or isinstance(layer, folium.PolyLine):
-                            st.session_state['prediction_map']._children.pop(layer.get_name(), None)
-
-                folium.Marker([lat_rx, lon_rx], tooltip="Trạm thu", icon=folium.Icon(color='blue')).add_to(st.session_state['prediction_map'])
-                folium.Marker(
-                    [lat_pred, lon_pred],
-                    tooltip=f"Nguồn phát dự đoán\nTần số: {freq} MHz\nMức tín hiệu: {signal} dBm",
-                    icon=folium.Icon(color='red')
-                ).add_to(st.session_state['prediction_map'])
-                folium.PolyLine(locations=[[lat_rx, lon_rx], [lat_pred, lon_pred]], color='green').add_to(st.session_state['prediction_map'])
-
-                with st.container():
-                    st_folium(st.session_state['prediction_map'], width=700, height=500, key="prediction_map_single") # Thêm key khác
-
-    else:
-        st.info("Vui lòng tải mô hình đã huấn luyện để thực hiện dự đoán.")
+            with st.form("input
