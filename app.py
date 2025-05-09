@@ -35,9 +35,9 @@ def calculate_destination(lat1, lon1, azimuth_deg, distance_km):
 
 def create_folium_map(data=None):
     if data is not None and not data.empty:
-        m = folium.Map(location=[data['lat_receiver'].mean(), data['lon_receiver'].mean()], zoom_start=8)
+        m = folium.Map(location=[data['lat_receiver'].mean(), data['lon_receiver'].mean()], zoom_start=8, tiles="Stadia.StamenTonerLite")
     else:
-        m = folium.Map(location=[16.0, 108.0], zoom_start=6)  # Vị trí mặc định
+        m = folium.Map(location=[16.0, 108.0], zoom_start=6, tiles="Stadia.StamenTonerLite")  # Sử dụng Stadia.StamenTonerLite
     return m
 
 # --- Giao diện ---
