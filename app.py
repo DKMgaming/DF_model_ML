@@ -33,6 +33,13 @@ def calculate_destination(lat1, lon1, azimuth_deg, distance_km):
     lon2 = lon1 + atan2(sin(brng) * sin(distance_km / R) * cos(lat1), cos(distance_km / R) - sin(lat1) * sin(lat2))
     return degrees(lat2), degrees(lon2)
 
+def create_folium_map(data=None):
+    if data is not None and not data.empty:
+        m = folium.Map(location=[data['lat_receiver'].mean(), data['lon_receiver'].mean()], zoom_start=8)
+    else:
+        m = folium.Map(location=[16.0, 108.0], zoom_start=6)  # Vị trí mặc định
+    return m
+
 # --- Giao diện ---
 st.set_page_config(layout="wide")
 st.title("🔭 Dự đoán tọa độ nguồn phát xạ theo hướng định vị")
@@ -174,7 +181,17 @@ with tab2:
         if uploaded_excel:
             df_input = pd.read_excel(uploaded_excel)
             results = []
-            m = folium.Map(location=[df_input['lat_receiver'].mean(), df_input['lon_receiver'].mean()], zoom_start=8)
+
+            if 'prediction_map' not in st.session_state:
+                st.session_state['prediction_map'] = create_folium_map(df_input)
+            else:
+                # Cập nhật vị trí trung tâm nếu dữ liệu thay đổi (tùy chọn)
+                new_center = [df_input['lat_receiver'].mean(), df_input['lon_receiver'].mean()]
+                if st.session_state['prediction_map'].location != new_center:
+                    st.session_state['prediction_map'] = create_folium_map(df_input)
+                # Xóa các layer cũ (markers, polylines) nếu cần thiết trước khi thêm mới
+                st.session_state['prediction_map']._children = {k: v for k, v in st.session_state['prediction_map']._children.items() if k.startswith('tile_layer') or k.startswith('crs')}
+
 
             for _, row in df_input.iterrows():
                 az_sin = np.sin(np.radians(row['azimuth']))
@@ -185,15 +202,14 @@ with tab2:
 
                 lat_pred, lon_pred = calculate_destination(row['lat_receiver'], row['lon_receiver'], row['azimuth'], predicted_distance)
 
-                # Thêm thông tin về tần số và mức tín hiệu vào tooltip của "Nguồn phát dự đoán"
                 folium.Marker(
                     [lat_pred, lon_pred],
                     tooltip=f"Nguồn phát dự đoán\nTần số: {row['frequency']} MHz\nMức tín hiệu: {row['signal_strength']} dBm",
                     icon=folium.Icon(color='red')
-                ).add_to(m)
+                ).add_to(st.session_state['prediction_map'])
 
-                folium.Marker([row['lat_receiver'], row['lon_receiver']], tooltip="Trạm thu", icon=folium.Icon(color='blue')).add_to(m)
-                folium.PolyLine(locations=[[row['lat_receiver'], row['lon_receiver']], [lat_pred, lon_pred]], color='green').add_to(m)
+                folium.Marker([row['lat_receiver'], row['lon_receiver']], tooltip="Trạm thu", icon=folium.Icon(color='blue')).add_to(st.session_state['prediction_map'])
+                folium.PolyLine(locations=[[row['lat_receiver'], row['lon_receiver']], [lat_pred, lon_pred]], color='green').add_to(st.session_state['prediction_map'])
 
                 results.append({
                     "lat_receiver": row['lat_receiver'],
@@ -206,7 +222,7 @@ with tab2:
                 })
 
             st.dataframe(pd.DataFrame(results))
-            st_folium(m, width=800, height=500)
+            st_folium(st.session_state['prediction_map'], width=800, height=500)
 
         else:
             with st.form("input_form"):
@@ -232,15 +248,23 @@ with tab2:
                 st.markdown(f"- **Kinh độ**: `{lon_pred:.6f}`")
                 st.markdown(f"- **Khoảng cách dự đoán**: `{predicted_distance:.2f} km`")
 
-                m = folium.Map(location=[lat_rx, lon_rx], zoom_start=10)
-                folium.Marker([lat_rx, lon_rx], tooltip="Trạm thu", icon=folium.Icon(color='blue')).add_to(m)
+                if 'prediction_map' not in st.session_state:
+                    st.session_state['prediction_map'] = create_folium_map(pd.DataFrame([{'lat_receiver': lat_rx, 'lon_receiver': lon_rx}]))
+                else:
+                    st.session_state['prediction_map'].location = [lat_rx, lon_rx] # Cập nhật tâm bản đồ
+                    # Xóa các layer cũ
+                    st.session_state['prediction_map']._children = {k: v for k, v in st.session_state['prediction_map']._children.items() if k.startswith('tile_layer') or k.startswith('crs')}
+
+                folium.Marker([lat_rx, lon_rx], tooltip="Trạm thu", icon=folium.Icon(color='blue')).add_to(st.session_state['prediction_map'])
                 folium.Marker(
                     [lat_pred, lon_pred],
                     tooltip=f"Nguồn phát dự đoán\nTần số: {freq} MHz\nMức tín hiệu: {signal} dBm",
                     icon=folium.Icon(color='red')
-                ).add_to(m)
-                folium.PolyLine(locations=[[lat_rx, lon_rx], [lat_pred, lon_pred]], color='green').add_to(m)
+                ).add_to(st.session_state['prediction_map'])
+                folium.PolyLine(locations=[[lat_rx, lon_rx], [lat_pred, lon_pred]], color='green').add_to(st.session_state['prediction_map'])
 
                 with st.container():
-                    st_folium(m, width=700, height=500, returned_objects=[])
+                    st_folium(st.session_state['prediction_map'], width=700, height=500, returned_objects=[])
 
+    else:
+        st.info("Vui lòng tải mô hình đã huấn luyện để thực hiện dự đoán.")
