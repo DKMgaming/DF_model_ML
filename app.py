@@ -265,4 +265,55 @@ with tab2:
                 )
 
         else:
-            with st.form("input
+            with st.form("input_form"):
+                lat_rx = st.number_input("Vĩ độ trạm thu", value=16.0)
+                lon_rx = st.number_input("Kinh độ trạm thu", value=108.0)
+                h_rx = st.number_input("Chiều cao anten (m)", value=30.0)
+                signal = st.number_input("Mức tín hiệu thu (dBm)", value=-80.0)
+                freq = st.number_input("Tần số (MHz)", value=900.0)
+                azimuth = st.number_input("Góc phương vị (độ)", value=45.0)
+                submitted = st.form_submit_button("🔍 Dự đoán tọa độ nguồn phát")
+
+            if submitted:
+                az_sin = np.sin(np.radians(azimuth))
+                az_cos = np.cos(np.radians(azimuth))
+                X_input = np.array([[lat_rx, lon_rx, h_rx, signal, freq, az_sin, az_cos]])
+                predicted_distance = model.predict(X_input)[0]
+                predicted_distance = max(predicted_distance, 0.1)
+
+                lat_pred, lon_pred = calculate_destination(lat_rx, lon_rx, azimuth, predicted_distance)
+
+                st.success("🎯 Tọa độ nguồn phát xạ dự đoán:")
+                st.markdown(f"- **Vĩ độ**: `{lat_pred:.6f}`")
+                st.markdown(f"- **Kinh độ**: `{lon_pred:.6f}`")
+                st.markdown(f"- **Khoảng cách dự đoán**: `{predicted_distance:.2f} km`")
+
+                if 'prediction_map' not in st.session_state:
+                    st.session_state['prediction_map'] = create_folium_map(pd.DataFrame([{'lat_receiver': lat_rx, 'lon_receiver': lon_rx}]))
+                else:
+                    st.session_state['prediction_map'].location = [lat_rx, lon_rx]
+                    st.session_state['prediction_map']._children = {k: v for k, v in st.session_state['prediction_map']._children.items() if k.startswith('tile_layer') or k.startswith('crs')}
+
+                folium.Marker([lat_rx, lon_rx], tooltip="Trạm thu", icon=folium.Icon(color='blue')).add_to(st.session_state['prediction_map'])
+                folium.Marker(
+                    [lat_pred, lon_pred],
+                    tooltip=f"Nguồn phát dự đoán\nTần số: {freq} MHz\nMức tín hiệu: {signal} dBm",
+                    icon=folium.Icon(color='red')
+                ).add_to(st.session_state['prediction_map'])
+                folium.PolyLine(locations=[[lat_rx, lon_rx], [lat_pred, lon_pred]], color='green').add_to(st.session_state['prediction_map'])
+
+                with st.container():
+                    st_folium(st.session_state['prediction_map'], width=700, height=500, key="prediction_map_single")
+
+                # Nút xuất file KML cho kết quả đơn lẻ
+                kml_string_single = create_single_kml(lat_rx, lon_rx, lat_pred, lon_pred, predicted_distance, freq, signal)
+                b_single = BytesIO(kml_string_single.encode())
+                st.download_button(
+                    label="📤 Xuất file KML",
+                    data=b_single,
+                    file_name="predicted_location.kml",
+                    mime="application/vnd.google-earth.kml+xml"
+                )
+
+    else:
+        st.info("Vui lòng tải mô hình đã huấn luyện để thực hiện dự đoán.")
